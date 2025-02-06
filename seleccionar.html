@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crear y Mover Divs Dentro de una Imagen</title>
+  <style>
+    .input-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      /* Espacio entre los elementos */
+    }
+
+    .coordinates-input {
+      margin-right: 5px;
+      /* Espacio entre los inputs */
+    }
+
+    #imageContainer {
+      position: relative;
+      display: inline-block;
+    }
+
+    #imageContainer img {
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .selectable-div {
+      position: absolute;
+      border: 2px dashed rgb(41, 189, 85);
+      background-color: rgba(152, 244, 147, 0.5);
+      /*Verde con transparencia */
+      cursor: grab;
+    }
+
+    .handle {
+      width: 10px;
+      height: 10px;
+      background: rgb(9, 84, 11);
+      position: absolute;
+      cursor: grab;
+    }
+
+    .top-left {
+      top: -5px;
+      left: -5px;
+      cursor: nw-resize;
+    }
+
+    .top-right {
+      top: -5px;
+      right: -5px;
+      cursor: ne-resize;
+    }
+
+    .bottom-left {
+      bottom: -5px;
+      left: -5px;
+      cursor: sw-resize;
+    }
+
+    .bottom-right {
+      bottom: -5px;
+      right: -5px;
+      cursor: se-resize;
+    }
+
+    .coordinates-input {
+      display: block;
+      margin: 5px;
+    }
+
+    .coordinates-input[disabled] {
+      background-color: rgba(224, 224, 224, 0.5);
+      /* Gris transparente */
+    }
+
+    .fondo-ignorado {
+      pointer-events: none;
+    }
+
+    .no-drag {
+      pointer-events: none;
+      /*no se puedan arrastrar los divs*/
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Selecciona un área </h1>
+  <h2>luego de hacer click al boton "Crear Area" haga click en alguna parte de la imagen para luego redimensionar el div 
+    ademas que si le da al boton guardar creara el map a una nueva direccion</h2>
+  <button id="createButton">Crear Nuevo Área</button>
+  <div id="contenedor">
+    <!-- Aquí se agregarán los nuevos inputs y botones -->
+  </div>
+  <div id="imageContainer">
+    <img src="./img/plano.png" alt="Imagen" class="fondo-ignorando" usemap="#imageMap" />
+    <map name="imageMap" id="imageMap">
+      <!-- Aquí se agregarán las áreas dinámicamente -->
+    </map>
+  </div>
+  <script>
+    document.querySelectorAll("img").forEach(function (img) {
+      img.addEventListener("dragstart", function (event) {
+        event.preventDefault();
+      });
+    });
+
+    // Variables Globales
+    var selectedDiv = null;
+    var divCounter = 0;
+    var isDragging = false;
+    var isResizing = false;
+    var currentHandle = null;
+    var offsetX = 0;
+    var offsetY = 0;
+    var initialX = 0;
+    var initialY = 0;
+
+    //  creacion del div
+    function createDiv() {
+      divCounter++;
+      document.addEventListener("click", placeDiv);
+
+      function placeDiv(e) {
+        if (
+          e.target.id !== "createButton" &&
+          e.target.tagName !== "INPUT" &&
+          e.target.tagName !== "BUTTON" &&
+          e.target.tagName !== "LABEL"
+        ) {
+          var imageContainerRect = document
+            .getElementById("imageContainer")
+            .getBoundingClientRect();
+
+          if (
+            e.clientX >= imageContainerRect.left &&
+            e.clientX <= imageContainerRect.right &&
+            e.clientY >= imageContainerRect.top &&
+            e.clientY <= imageContainerRect.bottom
+          ) {
+            var newDiv = document.createElement("div");
+            newDiv.classList.add("selectable-div");
+            newDiv.setAttribute("data-id", divCounter);
+            newDiv.style.left = e.clientX - imageContainerRect.left + "px";
+            newDiv.style.top = e.clientY - imageContainerRect.top + "px";
+
+            //esquinas del div
+            var handles = [
+              "top-left",
+              "top-right",
+              "bottom-left",
+              "bottom-right",
+            ];
+            handles.forEach(function (handleClass) {
+              var handle = document.createElement("div");
+              handle.classList.add("handle", handleClass);
+              newDiv.appendChild(handle);
+            });
+
+            newDiv.addEventListener("mousedown", function (e) {
+              if (e.target.classList.contains("handle")) {
+                if (!newDiv.classList.contains("no-drag")) {
+                  isResizing = true;
+                  currentHandle = e.target;
+                }
+              } else {
+                if (!newDiv.classList.contains("no-drag")) {
+                  isDragging = true;
+                  offsetX = e.clientX - newDiv.getBoundingClientRect().left;
+                  offsetY = e.clientY - newDiv.getBoundingClientRect().top;
+                  selectedDiv = newDiv; // Seleccionar el div
+                }
+              }
+              initialX = e.clientX;
+              initialY = e.clientY;
+            });
+
+            //calculo del moviminento y update de los inputs
+            document.addEventListener("mousemove", function (e) {
+              if (isDragging && selectedDiv === newDiv) {
+                var newLeft = e.clientX - offsetX;
+                var newTop = e.clientY - offsetY;
+                if (newLeft < 0) newLeft = 0;
+                if (newTop < 0) newTop = 0;
+                if (newLeft + newDiv.offsetWidth > imageContainerRect.width)
+                  newLeft = imageContainerRect.width - newDiv.offsetWidth;
+                if (newTop + newDiv.offsetHeight > imageContainerRect.height)
+                  newTop = imageContainerRect.height - newDiv.offsetHeight;
+                newDiv.style.left = newLeft + "px";
+                newDiv.style.top = newTop + "px";
+                updateInputs(inputContainer, newDiv);
+              } else if (isResizing && selectedDiv === newDiv) {
+                var deltaX = e.clientX - initialX;
+                var deltaY = e.clientY - initialY;
+
+                //primer tamano por defecto
+                var newWidth = Math.max(
+                  newDiv.offsetWidth +
+                  deltaX *
+                  (currentHandle.classList.contains("left") ? -1 : 1),
+                  10
+                );
+                var newHeight = Math.max(
+                  newDiv.offsetHeight +
+                  deltaY *
+                  (currentHandle.classList.contains("top") ? -1 : 1),
+                  10
+                );
+
+                if (newWidth >= 10) {
+                  newDiv.style.width = newWidth + "px";
+                  if (currentHandle.classList.contains("left")) {
+                    newDiv.style.left = initialX - newWidth + offsetX + "px";
+                  }
+                }
+                if (newHeight >= 10) {
+                  newDiv.style.height = newHeight + "px";
+                  if (currentHandle.classList.contains("top")) {
+                    newDiv.style.top = initialY - newHeight + offsetY + "px";
+                  }
+                }
+
+                initialX = e.clientX;
+                initialY = e.clientY;
+                updateInputs(inputContainer, newDiv);
+              }
+            });
+
+            document.addEventListener("mouseup", function () {
+              isDragging = false;
+              isResizing = false;
+              currentHandle = null;
+            });
+
+            //creacion de los inputs
+            document.getElementById("imageContainer").appendChild(newDiv);
+            var inputContainer = document.createElement("div");
+            inputContainer.setAttribute("data-id", divCounter);
+            inputContainer.classList.add("input-group");
+
+            var x1Input = document.createElement("input");
+            x1Input.type = "text";
+            x1Input.placeholder = "X1";
+            x1Input.classList.add("coordinates-input");
+
+            var y1Input = document.createElement("input");
+            y1Input.type = "text";
+            y1Input.placeholder = "Y1";
+            y1Input.classList.add("coordinates-input");
+
+            var x2Input = document.createElement("input");
+            x2Input.type = "text";
+            x2Input.placeholder = "X2";
+            x2Input.classList.add("coordinates-input");
+
+            var y2Input = document.createElement("input");
+            y2Input.type = "text";
+            y2Input.placeholder = "Y2";
+            y2Input.classList.add("coordinates-input");
+
+            var selectCheckbox = document.createElement("input");
+            selectCheckbox.type = "checkbox";
+            selectCheckbox.addEventListener("change", function () {
+              newDiv.classList.toggle("no-drag", !this.checked);
+              if (this.checked) {
+                selectDiv(newDiv, inputContainer);
+              } else {
+                if (selectedDiv === newDiv) {
+                  selectedDiv = null;
+                }
+              }
+            });
+
+            //botones
+            var deleteButton = document.createElement("button");
+            deleteButton.textContent = "Eliminar";
+            deleteButton.addEventListener("click", function () {
+              document.getElementById("imageContainer").removeChild(newDiv);
+              document
+                .getElementById("contenedor")
+                .removeChild(inputContainer);
+            });
+
+            //Boton de gurardado
+            var saveButton = document.createElement("button");
+            saveButton.textContent = "Guardar";
+            saveButton.addEventListener("click", function () {
+              if (saveButton.textContent === "Guardar") {
+                newDiv.classList.add("no-drag");
+                newDiv.style.backgroundColor = "rgba(224, 224, 224, 0.5)";
+                newDiv.querySelectorAll(".handle").forEach(function (handle) {
+                  handle.style.display = "none";
+                });
+                inputContainer
+                  .querySelectorAll('input[type="text"]')
+                  .forEach(function (input) {
+                    input.disabled = true;
+                  });
+
+                // Crear y agregar el área al mapa
+                var rect = newDiv.getBoundingClientRect();
+                var imageContainerRect = document
+                  .getElementById("imageContainer")
+                  .getBoundingClientRect();
+                var area = document.createElement("area");
+                area.shape = "rect";
+                area.coords = [
+                  rect.left - imageContainerRect.left,
+                  rect.top - imageContainerRect.top,
+                  rect.right - imageContainerRect.left,
+                  rect.bottom - imageContainerRect.top,
+                ].join(",");
+                area.href = "https://www.google.com";
+                area.target = "_blank";
+
+                // Añadir capa transparente sobre el div para manejar el clic
+                var clickableLayer = document.createElement("div");
+                clickableLayer.style.position = "absolute";
+                clickableLayer.style.left = newDiv.style.left;
+                clickableLayer.style.top = newDiv.style.top;
+                clickableLayer.style.width = newDiv.offsetWidth + "px";
+                clickableLayer.style.height = newDiv.offsetHeight + "px";
+                clickableLayer.style.cursor = "pointer";
+                clickableLayer.style.backgroundColor = "rgba(0, 0, 0, 0)"; // Transparente
+
+                clickableLayer.addEventListener("click", function () {
+                  console.log("Área del mapa clicada!");
+                  window.open(area.href, area.target);
+                });
+
+                document
+                  .getElementById("imageContainer")
+                  .appendChild(clickableLayer);
+                console.log("Área creada con coordenadas:", area.coords);
+
+                document.getElementById("imageMap").appendChild(area);
+                saveButton.textContent = "Editar";
+              } else {
+                newDiv.classList.remove("no-drag");
+                newDiv.style.cursor = "move";
+                newDiv.style.backgroundColor = "rgba(0, 255, 0, 0.3)";
+                newDiv.querySelectorAll(".handle").forEach(function (handle) {
+                  handle.style.display = "block";
+                });
+                inputContainer
+                  .querySelectorAll('input[type="text"]')
+                  .forEach(function (input) {
+                    input.disabled = false;
+                  });
+                saveButton.textContent = "Guardar";
+              }
+            });
+
+            inputContainer.appendChild(x1Input);
+            inputContainer.appendChild(y1Input);
+            inputContainer.appendChild(x2Input);
+            inputContainer.appendChild(y2Input);
+            inputContainer.appendChild(selectCheckbox);
+            inputContainer.appendChild(deleteButton);
+            inputContainer.appendChild(saveButton);
+            document.getElementById("contenedor").appendChild(inputContainer);
+
+            selectDiv(newDiv, inputContainer);
+
+            function updateInputs(container, div) {
+              var rect = div.getBoundingClientRect();
+              container.querySelector(
+                '.coordinates-input[placeholder="X1"]'
+              ).value = rect.left;
+              container.querySelector(
+                '.coordinates-input[placeholder="Y1"]'
+              ).value = rect.top;
+              container.querySelector(
+                '.coordinates-input[placeholder="X2"]'
+              ).value = rect.right;
+              container.querySelector(
+                '.coordinates-input[placeholder="Y2"]'
+              ).value = rect.bottom;
+            }
+
+            document.removeEventListener("click", placeDiv);
+          }
+        }
+      }
+    }
+
+    function selectDiv(div, inputContainer) {
+      var checkboxes = document.querySelectorAll(
+        '#contenedor input[type="checkbox"]'
+      );
+      checkboxes.forEach(function (checkbox) {
+        checkbox.checked = false;
+      });
+      inputContainer.querySelector('input[type="checkbox"]').checked = true;
+      selectedDiv = div;
+    }
+
+    document
+      .getElementById("createButton")
+      .addEventListener("click", createDiv);
+  </script>
+</body>
+
+</html>
